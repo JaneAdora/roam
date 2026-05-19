@@ -38,5 +38,9 @@ pub fn broken_style() -> Style {
     Style::default().fg(MAGENTA).add_modifier(Modifier::DIM)
 }
 
+pub fn preview_text() -> Style {
+    Style::default().fg(PINK)
+}
+
 pub const FOCUS_MARKER: &str = "▸ ";
 pub const UNFOCUSED_PREFIX: &str = "  ";

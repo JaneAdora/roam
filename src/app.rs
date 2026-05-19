@@ -506,13 +506,13 @@ fn action_target(state: &AppState) -> Option<PathBuf> {
 fn action_cd_exit(state: &AppState) -> Option<RunOutcome> {
     let path = action_target(state)?;
     let target = resolve_target_dir(&path);
-    Some(RunOutcome::PrintAndExit(actions::cd_command(&target)))
+    exit_with(actions::cd_command(&target))
 }
 
 fn action_claude(state: &AppState, danger: bool) -> Option<RunOutcome> {
     let path = action_target(state)?;
     let target = resolve_target_dir(&path);
-    Some(RunOutcome::PrintAndExit(actions::claude_command(&target, danger)))
+    exit_with(actions::claude_command(&target, danger))
 }
 
 fn action_claude_danger(state: &mut AppState) -> Option<RunOutcome> {
@@ -533,17 +533,17 @@ fn action_claude_danger(state: &mut AppState) -> Option<RunOutcome> {
 fn action_shell(state: &AppState) -> Option<RunOutcome> {
     let path = action_target(state)?;
     let target = resolve_target_dir(&path);
-    Some(RunOutcome::PrintAndExit(actions::shell_command(&target)))
+    exit_with(actions::shell_command(&target))
 }
 
 fn action_new_tab(state: &mut AppState) -> Option<RunOutcome> {
     let path = action_target(state)?;
     let target = resolve_target_dir(&path);
     if actions::in_tmux() {
-        Some(RunOutcome::PrintAndExit(actions::tmux_new_window(&target)))
+        exit_with(actions::tmux_new_window(&target))
     } else {
         state.toast("no tmux: falling back to shell-in-place");
-        Some(RunOutcome::PrintAndExit(actions::shell_command(&target)))
+        exit_with(actions::shell_command(&target))
     }
 }
 
@@ -564,7 +564,7 @@ fn action_edit(state: &AppState) -> Option<RunOutcome> {
     if entry.is_dir_like() {
         return None;
     }
-    Some(RunOutcome::PrintAndExit(actions::editor_command(&entry.path)))
+    exit_with(actions::editor_command(&entry.path))
 }
 
 fn action_copy_contents(state: &mut AppState) {
@@ -602,6 +602,11 @@ fn open_preview_modal(state: &mut AppState) {
         preview::Preview::Unreadable => "(unreadable)".to_string(),
     };
     state.mode = InputMode::PreviewModal { title, text, scroll: 0 };
+}
+
+fn exit_with(cmd: String) -> Option<RunOutcome> {
+    let _ = actions::copy_to_clipboard(&cmd);
+    Some(RunOutcome::PrintAndExit(cmd))
 }
 
 fn resolve_target_dir(path: &Path) -> PathBuf {

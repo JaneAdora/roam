@@ -12,7 +12,7 @@ pub fn render(f: &mut Frame, area: Rect, content: Option<&str>) {
         Some(text) => text.to_string(),
         None => "(no preview)".to_string(),
     };
-    let p = Paragraph::new(body).block(block).style(theme::dim_footer());
+    let p = Paragraph::new(body).block(block).style(theme::preview_text());
     f.render_widget(p, area);
 }
 
@@ -27,6 +27,8 @@ pub fn render_modal(f: &mut Frame, area: Rect, title: &str, content: &str, scrol
     f.render_widget(ratatui::widgets::Clear, area);
     let inner = block.inner(area);
     f.render_widget(block, area);
-    let p = Paragraph::new(content.to_string()).scroll((scroll, 0));
+    let p = Paragraph::new(content.to_string())
+        .scroll((scroll, 0))
+        .style(theme::preview_text());
     f.render_widget(p, inner);
 }
