@@ -199,7 +199,7 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
             modal::render_help(f, rect);
         }
         InputMode::PreviewModal { title, text, scroll } => {
-            let rect = ui::centered_rect(area, 90, 90);
+            let rect = ui::centered_rect(area, 100, 90);
             ui_preview::render_modal(f, rect, title, text, *scroll);
         }
         InputMode::Search { query } => {

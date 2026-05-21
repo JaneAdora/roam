@@ -1,7 +1,7 @@
 use crate::ui::theme;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 
 pub fn render(f: &mut Frame, area: Rect, content: Option<&str>) {
@@ -28,6 +28,7 @@ pub fn render_modal(f: &mut Frame, area: Rect, title: &str, content: &str, scrol
     let inner = block.inner(area);
     f.render_widget(block, area);
     let p = Paragraph::new(content.to_string())
+        .wrap(Wrap { trim: false })
         .scroll((scroll, 0))
         .style(theme::preview_text());
     f.render_widget(p, inner);
