@@ -16,7 +16,8 @@ const HELP: &str = "\
 roam :: mobile-friendly file browser
 
 USAGE:
-  roam [PATH]      Open at PATH, $ROAM_ROOT, or $HOME (in that order).
+  roam [PATH]      Open at PATH, $ROAM_ROOT, or $HOME (in that order). If PATH
+  is a file       open its folder and jump straight to the file's preview.
   roam --resume    Open at the last-visited dir (persisted across runs).
   roam --help      Print this message.
   roam --version   Print version.
@@ -52,7 +53,18 @@ fn main() -> Result<()> {
 
     let persisted = config::load();
     let bookmarks = bookmarks::load();
-    let start = resolve_start(path_arg, want_resume, &persisted);
+    let resolved = resolve_start(path_arg, want_resume, &persisted);
+    // If the target is a file, open its parent directory and jump to its preview.
+    let (start, preview_file) = if resolved.is_file() {
+        let abs = resolved.canonicalize().unwrap_or(resolved);
+        let parent = abs
+            .parent()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/"));
+        (parent, Some(abs))
+    } else {
+        (resolved, None)
+    };
 
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -65,6 +77,9 @@ fn main() -> Result<()> {
     let mut terminal = ratatui::Terminal::new(backend)?;
 
     let mut state = app::AppState::new(start, persisted, bookmarks)?;
+    if let Some(file) = preview_file {
+        state.preview_path(&file);
+    }
 
     let result = app::run(&mut terminal, &mut state);
 

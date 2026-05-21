@@ -104,6 +104,29 @@ impl AppState {
         }
     }
 
+    /// Focus `file` in the current listing (if present) and open its preview
+    /// modal immediately. Reads the file directly, so it also works for files
+    /// that aren't listed (e.g. hidden ones).
+    pub fn preview_path(&mut self, file: &Path) {
+        if let Some(name) = file.file_name() {
+            if let Some(idx) = self.entries.iter().position(|e| e.name == *name) {
+                self.selected = idx;
+            }
+        }
+        let title = file
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| file.to_string_lossy().into_owned());
+        let text = match preview::read(file) {
+            preview::Preview::Text(s) => s,
+            preview::Preview::Binary { size } => {
+                format!("(binary file, {})", roam_fs::human_size(size))
+            }
+            preview::Preview::Unreadable => "(unreadable)".to_string(),
+        };
+        self.mode = InputMode::PreviewModal { title, text, scroll: 0 };
+    }
+
     pub fn toast(&mut self, msg: impl Into<String>) {
         self.transient = Some((msg.into(), Instant::now()));
     }
