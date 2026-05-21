@@ -4,17 +4,27 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 
-pub fn render(f: &mut Frame, area: Rect, content: Option<&str>, markdown: bool) {
+/// Markdown -> styled markdown; recognized code/markup -> syntax highlight;
+/// anything else -> None (caller renders plain text).
+fn styled_lines(content: &str, name: &str) -> Option<Vec<Line<'static>>> {
+    if crate::ui::markdown::is_markdown(name) {
+        return Some(crate::ui::markdown::to_lines(content));
+    }
+    crate::ui::highlight::language_for(name)
+        .map(|lang| crate::ui::highlight::to_lines(content, lang))
+}
+
+pub fn render(f: &mut Frame, area: Rect, content: Option<&str>, name: Option<&str>) {
     let block = Block::default()
         .borders(Borders::LEFT)
         .border_style(theme::dim_footer());
     let p = match content {
-        Some(text) if markdown => {
-            Paragraph::new(crate::ui::markdown::to_lines(text)).block(block)
-        }
-        Some(text) => Paragraph::new(text.to_string())
-            .block(block)
-            .style(theme::preview_text()),
+        Some(text) => match name.and_then(|n| styled_lines(text, n)) {
+            Some(lines) => Paragraph::new(lines).block(block),
+            None => Paragraph::new(text.to_string())
+                .block(block)
+                .style(theme::preview_text()),
+        },
         None => Paragraph::new("(no preview)".to_string())
             .block(block)
             .style(theme::dim_footer()),
@@ -22,14 +32,7 @@ pub fn render(f: &mut Frame, area: Rect, content: Option<&str>, markdown: bool) 
     f.render_widget(p.wrap(Wrap { trim: false }), area);
 }
 
-pub fn render_modal(
-    f: &mut Frame,
-    area: Rect,
-    title: &str,
-    content: &str,
-    scroll: u16,
-    markdown: bool,
-) {
+pub fn render_modal(f: &mut Frame, area: Rect, title: &str, content: &str, scroll: u16) {
     let block = Block::default()
         .title(Line::from(Span::styled(
             format!(" {title} "),
@@ -40,10 +43,9 @@ pub fn render_modal(
     f.render_widget(ratatui::widgets::Clear, area);
     let inner = block.inner(area);
     f.render_widget(block, area);
-    let p = if markdown {
-        Paragraph::new(crate::ui::markdown::to_lines(content))
-    } else {
-        Paragraph::new(content.to_string()).style(theme::preview_text())
+    let p = match styled_lines(content, title) {
+        Some(lines) => Paragraph::new(lines),
+        None => Paragraph::new(content.to_string()).style(theme::preview_text()),
     };
     f.render_widget(p.wrap(Wrap { trim: false }).scroll((scroll, 0)), inner);
 }

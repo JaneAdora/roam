@@ -187,11 +187,8 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
             .split(body);
         ui_entries::render(f, split[0], &state.entries, state.selected, cols, loading);
         let preview_text = focused_preview_text(state);
-        let is_md = state
-            .focused()
-            .map(|e| ui::markdown::is_markdown(&e.display_name()))
-            .unwrap_or(false);
-        ui_preview::render(f, split[1], preview_text.as_deref(), is_md);
+        let name = state.focused().map(|e| e.display_name());
+        ui_preview::render(f, split[1], preview_text.as_deref(), name.as_deref());
     } else {
         ui_entries::render(f, body, &state.entries, state.selected, cols, loading);
     }
@@ -210,8 +207,7 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
         }
         InputMode::PreviewModal { title, text, scroll } => {
             let rect = ui::centered_rect(area, 100, 90);
-            let md = ui::markdown::is_markdown(title);
-            ui_preview::render_modal(f, rect, title, text, *scroll, md);
+            ui_preview::render_modal(f, rect, title, text, *scroll);
         }
         InputMode::Search { query, recursive } => {
             let rect = ui::centered_rect(area, 60, 20);
