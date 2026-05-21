@@ -2,6 +2,7 @@ pub mod entries;
 pub mod footer;
 pub mod header;
 pub mod layout;
+pub mod markdown;
 pub mod modal;
 pub mod pinned;
 pub mod preview;
