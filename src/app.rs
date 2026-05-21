@@ -25,6 +25,8 @@ pub struct AppState {
     pub transient: Option<(String, Instant)>,
     pub mode: InputMode,
     pub pending_danger: Option<Instant>,
+    /// When Some, `entries` holds recursive-find results for this query.
+    pub find: Option<String>,
 }
 
 pub enum InputMode {
@@ -38,6 +40,7 @@ pub enum InputMode {
     },
     Search {
         query: String,
+        recursive: bool,
     },
 }
 
@@ -55,6 +58,7 @@ impl AppState {
             transient: None,
             mode: InputMode::Normal,
             pending_danger: None,
+            find: None,
         })
     }
 
@@ -64,6 +68,7 @@ impl AppState {
 
     fn refresh_entries(&mut self) {
         self.preview_cache = None;
+        self.find = None;
         match roam_fs::list_dir(&self.cwd, self.show_hidden) {
             Ok(v) => {
                 self.entries = v;
@@ -162,7 +167,8 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
         .split(area);
 
     let mut idx = 0;
-    header::render(f, chunks[idx], &state.cwd, state.current_transient());
+    let find_info = state.find.as_deref().map(|q| (q, state.entries.len()));
+    header::render(f, chunks[idx], &state.cwd, state.current_transient(), find_info);
     idx += 1;
     if pinned_height > 0 {
         pinned::render(f, chunks[idx], &state.bookmarks.display);
@@ -202,16 +208,21 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
             let rect = ui::centered_rect(area, 100, 90);
             ui_preview::render_modal(f, rect, title, text, *scroll);
         }
-        InputMode::Search { query } => {
+        InputMode::Search { query, recursive } => {
             let rect = ui::centered_rect(area, 60, 20);
+            let (label, prefix) = if *recursive {
+                (" find (recursive, depth 3) ", "R")
+            } else {
+                (" filter current dir ", "/")
+            };
             let block = ratatui::widgets::Block::default()
-                .title(" filter ")
+                .title(label)
                 .borders(ratatui::widgets::Borders::ALL)
                 .border_style(ui::theme::pane_header());
             f.render_widget(ratatui::widgets::Clear, rect);
             let inner = block.inner(rect);
             f.render_widget(block, rect);
-            let p = ratatui::widgets::Paragraph::new(format!("/ {query}"));
+            let p = ratatui::widgets::Paragraph::new(format!("{prefix} {query}"));
             f.render_widget(p, inner);
         }
     }
@@ -291,7 +302,12 @@ fn handle_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>>
             });
         }
 
-        KeyCode::Char('/') => state.mode = InputMode::Search { query: String::new() },
+        KeyCode::Char('/') => {
+            state.mode = InputMode::Search { query: String::new(), recursive: false }
+        }
+        KeyCode::Char('R') => {
+            state.mode = InputMode::Search { query: String::new(), recursive: true }
+        }
 
         KeyCode::Char('o') => return Ok(action_cd_exit(state)),
         KeyCode::Char('c') => return Ok(action_claude(state, false)),
@@ -304,6 +320,14 @@ fn handle_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>>
 
         KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
             jump_bookmark(state, c);
+        }
+
+        KeyCode::Esc => {
+            if state.find.is_some() {
+                state.selected = 0;
+                state.refresh_entries();
+                state.toast("find cleared");
+            }
         }
 
         KeyCode::Enter => open_action_menu(state),
@@ -363,15 +387,20 @@ fn handle_preview_modal_key(state: &mut AppState, key: KeyEvent) -> Result<Optio
 }
 
 fn handle_search_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>> {
-    let InputMode::Search { query } = &mut state.mode else {
+    let InputMode::Search { query, recursive } = &mut state.mode else {
         return Ok(None);
     };
     match key.code {
         KeyCode::Esc => state.mode = InputMode::Normal,
         KeyCode::Enter => {
+            let recursive = *recursive;
             let q = query.clone();
             state.mode = InputMode::Normal;
-            apply_filter(state, &q);
+            if recursive {
+                run_recursive_find(state, &q);
+            } else {
+                apply_filter(state, &q);
+            }
         }
         KeyCode::Backspace => {
             query.pop();
@@ -397,6 +426,26 @@ fn apply_filter(state: &mut AppState, query: &str) {
     } else {
         state.toast(format!("no match for '{query}'"));
     }
+}
+
+fn run_recursive_find(state: &mut AppState, query: &str) {
+    if query.is_empty() {
+        return;
+    }
+    let results = roam_fs::find_recursive(&state.cwd, query, state.show_hidden, 3);
+    if results.is_empty() {
+        state.toast(format!("no matches for '{query}'"));
+        return;
+    }
+    let n = results.len();
+    state.entries = results;
+    state.selected = 0;
+    state.preview_cache = None;
+    state.find = Some(query.to_string());
+    state.toast(format!(
+        "{n} match{} for '{query}'  (Esc to clear)",
+        if n == 1 { "" } else { "es" }
+    ));
 }
 
 fn move_down(state: &mut AppState) {

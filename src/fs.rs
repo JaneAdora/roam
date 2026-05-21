@@ -113,6 +113,57 @@ pub fn human_size(n: u64) -> String {
     }
 }
 
+/// Recursively find entries under `root` whose name contains `query`
+/// (case-insensitive), to a bounded depth. Hidden entries are skipped unless
+/// `show_hidden`; symlinked dirs are not descended into (loop-safe); results are
+/// capped. Each result's `name` is set to its path RELATIVE to `root` for
+/// display. `max_depth` = how many levels below `root` to search (depth 1 = the
+/// direct children of `root`).
+pub fn find_recursive(root: &Path, query: &str, show_hidden: bool, max_depth: usize) -> Vec<Entry> {
+    let q = query.to_lowercase();
+    if q.is_empty() {
+        return Vec::new();
+    }
+    const CAP: usize = 1000;
+    let mut out: Vec<Entry> = Vec::new();
+    let mut stack: Vec<(PathBuf, usize)> = vec![(root.to_path_buf(), 0)];
+    while let Some((dir, depth)) = stack.pop() {
+        let read = match fs::read_dir(&dir) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        for dent in read.flatten() {
+            let name = dent.file_name();
+            let is_hidden = name.to_string_lossy().starts_with('.');
+            if !show_hidden && is_hidden {
+                continue;
+            }
+            let path = dent.path();
+            // symlink_metadata does not follow links, so symlinked dirs read as
+            // non-dirs here and we never recurse into them (no cycles).
+            let is_real_dir = fs::symlink_metadata(&path)
+                .map(|m| m.is_dir())
+                .unwrap_or(false);
+            if name.to_string_lossy().to_lowercase().contains(&q) {
+                let mut e = build_entry(name.clone(), path.clone(), is_hidden);
+                if let Ok(rel) = path.strip_prefix(root) {
+                    e.name = rel.as_os_str().to_os_string();
+                }
+                out.push(e);
+                if out.len() >= CAP {
+                    out.sort_by(compare);
+                    return out;
+                }
+            }
+            if is_real_dir && depth + 1 < max_depth {
+                stack.push((path, depth + 1));
+            }
+        }
+    }
+    out.sort_by(compare);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +175,31 @@ mod tests {
         assert_eq!(human_size(1024), "1.00K");
         assert_eq!(human_size(1024 * 1024), "1.00M");
         assert_eq!(human_size(1024 * 1024 * 3 / 2), "1.50M");
+    }
+
+    #[test]
+    fn find_recursive_matches_and_bounds_depth() {
+        use std::fs as f;
+        let base = std::env::temp_dir().join(format!("roam_find_test_{}", std::process::id()));
+        let _ = f::remove_dir_all(&base);
+        f::create_dir_all(base.join("d1/d2/d3")).unwrap();
+        f::write(base.join("alpha_match.txt"), b"x").unwrap(); // depth 1
+        f::write(base.join("d1/beta_match.txt"), b"x").unwrap(); // depth 2
+        f::write(base.join("d1/d2/gamma_match.txt"), b"x").unwrap(); // depth 3
+        f::write(base.join("d1/d2/d3/delta_match.txt"), b"x").unwrap(); // depth 4
+        let names: Vec<String> = find_recursive(&base, "match", false, 3)
+            .iter()
+            .map(|e| e.display_name())
+            .collect();
+        assert!(names.iter().any(|n| n.contains("alpha_match")), "{names:?}");
+        assert!(names.iter().any(|n| n == "d1/beta_match.txt"), "{names:?}");
+        assert!(names.iter().any(|n| n.ends_with("gamma_match.txt")), "{names:?}");
+        assert!(!names.iter().any(|n| n.contains("delta_match")), "depth-4 leaked: {names:?}");
+        let _ = f::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn find_recursive_empty_query_is_empty() {
+        assert!(find_recursive(&std::env::temp_dir(), "", false, 3).is_empty());
     }
 }

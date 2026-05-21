@@ -151,11 +151,40 @@ fn name_style(entry: &Entry, focused: bool) -> Style {
 
 fn truncate(s: &str, max: u16) -> String {
     let max = max as usize;
-    if s.chars().count() <= max {
-        s.to_string()
+    let len = s.chars().count();
+    if len <= max {
+        return s.to_string();
+    }
+    // Relative paths (recursive-find results) keep the tail so the basename stays
+    // visible; plain names keep the head.
+    if s.contains('/') {
+        let take = max.saturating_sub(1);
+        let mut out = String::from("…");
+        out.extend(s.chars().skip(len - take));
+        out
     } else {
         let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
         out.push('…');
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate;
+
+    #[test]
+    fn truncate_plain_name_keeps_head() {
+        let t = truncate("verylongfilename.txt", 8);
+        assert!(t.ends_with('…'));
+        assert!(t.chars().count() <= 8);
+    }
+
+    #[test]
+    fn truncate_path_keeps_basename_tail() {
+        let t = truncate("aaa/bbb/ccc/the_file.txt", 12);
+        assert!(t.starts_with('…'));
+        assert!(t.ends_with(".txt"));
+        assert!(t.chars().count() <= 12);
     }
 }
