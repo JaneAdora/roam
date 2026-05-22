@@ -3,6 +3,7 @@ pub mod footer;
 pub mod header;
 pub mod layout;
 pub mod highlight;
+pub mod image;
 pub mod markdown;
 pub mod modal;
 pub mod pinned;

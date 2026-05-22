@@ -21,6 +21,8 @@ pub struct AppState {
     pub show_hidden: bool,
     pub preview_enabled: bool,
     pub preview_cache: Option<(usize, String)>,
+    /// Decoded+downscaled image for the focused entry (keyed by path).
+    pub image_cache: Option<(PathBuf, image::RgbaImage)>,
     pub bookmarks: bookmarks::Loaded,
     pub transient: Option<(String, Instant)>,
     pub mode: InputMode,
@@ -54,6 +56,7 @@ impl AppState {
             show_hidden: persisted.show_hidden,
             preview_enabled: persisted.preview_enabled,
             preview_cache: None,
+            image_cache: None,
             bookmarks,
             transient: None,
             mode: InputMode::Normal,
@@ -64,6 +67,28 @@ impl AppState {
 
     pub fn focused(&self) -> Option<&Entry> {
         self.entries.get(self.selected)
+    }
+
+    /// Half-block lines for an image file, sized to `cols`x`rows`. Decodes once
+    /// per path (downscaled, cached) so redraws are cheap.
+    fn image_lines(&mut self, path: &Path, cols: u16, rows: u16) -> Vec<ratatui::text::Line<'static>> {
+        if std::fs::metadata(path).map(|m| m.len()).unwrap_or(0) > 30 * 1024 * 1024 {
+            return vec![ratatui::text::Line::from("(image too large to preview)")];
+        }
+        let stale = self.image_cache.as_ref().map_or(true, |(p, _)| p != path);
+        if stale {
+            match image::open(path) {
+                Ok(img) => {
+                    self.image_cache = Some((path.to_path_buf(), img.thumbnail(480, 480).to_rgba8()));
+                }
+                Err(_) => {
+                    self.image_cache = None;
+                    return vec![ratatui::text::Line::from("(cannot decode image)")];
+                }
+            }
+        }
+        let (_, small) = self.image_cache.as_ref().unwrap();
+        crate::ui::image::halfblocks(small, cols, rows)
     }
 
     fn refresh_entries(&mut self) {
@@ -209,9 +234,25 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
             .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
             .split(body);
         ui_entries::render(f, split[0], &state.entries, state.selected, cols, loading);
-        let preview_text = focused_preview_text(state);
-        let name = state.focused().map(|e| e.display_name());
-        ui_preview::render(f, split[1], preview_text.as_deref(), name.as_deref());
+        let img_path = state
+            .focused()
+            .filter(|e| !e.is_dir_like())
+            .map(|e| e.path.clone())
+            .filter(|p| ui::image::is_image(&p.to_string_lossy()));
+        if let Some(path) = img_path {
+            let area = split[1];
+            let block = ratatui::widgets::Block::default()
+                .borders(ratatui::widgets::Borders::LEFT)
+                .border_style(ui::theme::dim_footer());
+            let inner = block.inner(area);
+            f.render_widget(block, area);
+            let lines = state.image_lines(&path, inner.width, inner.height);
+            f.render_widget(ratatui::widgets::Paragraph::new(lines), inner);
+        } else {
+            let preview_text = focused_preview_text(state);
+            let name = state.focused().map(|e| e.display_name());
+            ui_preview::render(f, split[1], preview_text.as_deref(), name.as_deref());
+        }
     } else {
         ui_entries::render(f, body, &state.entries, state.selected, cols, loading);
     }
