@@ -259,9 +259,10 @@ fn focused_preview_text(state: &mut AppState) -> Option<String> {
             return Some(text.clone());
         }
     }
+    let show_hidden = state.show_hidden;
     let entry = state.focused()?;
     let text = if entry.is_dir_like() {
-        format!("(directory: {})", entry.display_name())
+        dir_listing(&entry.path, show_hidden)
     } else {
         match preview::read(&entry.path) {
             preview::Preview::Text(s) => s,
@@ -273,6 +274,26 @@ fn focused_preview_text(state: &mut AppState) -> Option<String> {
     };
     state.preview_cache = Some((idx, text.clone()));
     Some(text)
+}
+
+/// Preview a folder by listing its contents (dirs first), for the right pane.
+fn dir_listing(path: &Path, show_hidden: bool) -> String {
+    let items = roam_fs::list_dir(path, show_hidden).unwrap_or_default();
+    if items.is_empty() {
+        return "(empty folder)".to_string();
+    }
+    const CAP: usize = 500;
+    let mut lines: Vec<String> = Vec::with_capacity(items.len().min(CAP) + 2);
+    lines.push(format!("{} items", items.len()));
+    lines.push(String::new());
+    for e in items.iter().take(CAP) {
+        let (icon, suffix) = if e.is_dir_like() { ("\u{1F4C1} ", "/") } else { ("   ", "") };
+        lines.push(format!("{icon}{}{suffix}", e.display_name()));
+    }
+    if items.len() > CAP {
+        lines.push(format!("\u{2026} (+{} more)", items.len() - CAP));
+    }
+    lines.join("\n")
 }
 
 fn handle_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>> {
