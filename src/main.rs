@@ -87,6 +87,7 @@ fn main() -> Result<()> {
         last_dir: Some(state.cwd.clone()),
         show_hidden: state.show_hidden,
         preview_enabled: state.preview_enabled,
+        icons: state.icon_style,
     };
     let _ = config::save(&snapshot);
 

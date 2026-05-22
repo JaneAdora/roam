@@ -1,5 +1,6 @@
 use crate::fs::human_size;
-use crate::model::{Entry, EntryKind};
+use crate::model::Entry;
+use crate::ui::icons::{self, IconStyle};
 use crate::ui::layout::Columns;
 use crate::ui::theme;
 use ratatui::layout::Rect;
@@ -15,6 +16,7 @@ pub fn render(
     selected: usize,
     cols: Columns,
     loading: bool,
+    icon_style: IconStyle,
 ) {
     if loading && entries.is_empty() {
         let p = ratatui::widgets::Paragraph::new(Line::from(Span::styled(
@@ -37,7 +39,7 @@ pub fn render(
     let items: Vec<ListItem> = entries
         .iter()
         .enumerate()
-        .map(|(i, e)| make_item(e, i == selected, cols))
+        .map(|(i, e)| make_item(e, i == selected, cols, icon_style))
         .collect();
 
     let list = List::new(items);
@@ -46,13 +48,13 @@ pub fn render(
     f.render_stateful_widget(list, area, &mut state);
 }
 
-fn make_item<'a>(entry: &'a Entry, focused: bool, cols: Columns) -> ListItem<'a> {
+fn make_item<'a>(entry: &'a Entry, focused: bool, cols: Columns, icon_style: IconStyle) -> ListItem<'a> {
     let marker = if focused {
         theme::FOCUS_MARKER
     } else {
         theme::UNFOCUSED_PREFIX
     };
-    let icon = icon_for(entry, cols.compact_icons);
+    let icon = icons::icon_for(entry, icon_style, cols.compact_icons);
     let name = truncate(&entry.display_name(), cols.name_max);
 
     let mut spans = vec![
@@ -90,49 +92,6 @@ fn make_item<'a>(entry: &'a Entry, focused: bool, cols: Columns) -> ListItem<'a>
     }
 
     ListItem::new(Line::from(spans))
-}
-
-fn icon_for(entry: &Entry, compact: bool) -> &'static str {
-    match entry.kind {
-        EntryKind::Dir => {
-            if compact {
-                "d "
-            } else {
-                "📁 "
-            }
-        }
-        EntryKind::Symlink { broken: true, .. } => {
-            if compact {
-                "x "
-            } else {
-                "⚠ "
-            }
-        }
-        EntryKind::Symlink {
-            points_to_dir: true,
-            ..
-        } => {
-            if compact {
-                "l "
-            } else {
-                "🔗 "
-            }
-        }
-        EntryKind::Symlink { .. } => {
-            if compact {
-                "l "
-            } else {
-                "🔗 "
-            }
-        }
-        EntryKind::File => {
-            if compact {
-                "  "
-            } else {
-                "  "
-            }
-        }
-    }
 }
 
 fn name_style(entry: &Entry, focused: bool) -> Style {

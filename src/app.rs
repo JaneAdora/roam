@@ -29,6 +29,8 @@ pub struct AppState {
     pub pending_danger: Option<Instant>,
     /// When Some, `entries` holds recursive-find results for this query.
     pub find: Option<String>,
+    /// File-icon style for the entry list (cycled with `I`, persisted).
+    pub icon_style: crate::ui::icons::IconStyle,
 }
 
 pub enum InputMode {
@@ -66,6 +68,7 @@ impl AppState {
             mode: InputMode::Normal,
             pending_danger: None,
             find: None,
+            icon_style: persisted.icons,
         })
     }
 
@@ -244,7 +247,7 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
             .split(body);
-        ui_entries::render(f, split[0], &state.entries, state.selected, cols, loading);
+        ui_entries::render(f, split[0], &state.entries, state.selected, cols, loading, state.icon_style);
         let img_path = state
             .focused()
             .filter(|e| !e.is_dir_like())
@@ -264,7 +267,7 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
             ui_preview::render(f, split[1], preview_text.as_deref(), name.as_deref());
         }
     } else {
-        ui_entries::render(f, body, &state.entries, state.selected, cols, loading);
+        ui_entries::render(f, body, &state.entries, state.selected, cols, loading, state.icon_style);
     }
 
     footer::render(f, chunks[idx], state.current_transient());
@@ -421,6 +424,10 @@ fn handle_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>>
             } else {
                 "preview: off"
             });
+        }
+        KeyCode::Char('I') => {
+            state.icon_style = state.icon_style.next();
+            state.toast(format!("icons: {}", state.icon_style.label()));
         }
 
         KeyCode::Char('/') => {

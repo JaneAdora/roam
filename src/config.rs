@@ -9,6 +9,8 @@ pub struct State {
     pub show_hidden: bool,
     #[serde(default = "default_preview")]
     pub preview_enabled: bool,
+    #[serde(default)]
+    pub icons: crate::ui::icons::IconStyle,
 }
 
 impl Default for State {
@@ -17,6 +19,7 @@ impl Default for State {
             last_dir: None,
             show_hidden: false,
             preview_enabled: true,
+            icons: crate::ui::icons::IconStyle::default(),
         }
     }
 }

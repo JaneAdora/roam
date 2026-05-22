@@ -99,6 +99,7 @@ ACTIONS (Enter opens menu)
 VIEW
   .   toggle hidden           p   toggle preview pane
   r   refresh                 B   bookmark current
+  I   cycle file icons
 
 SEARCH
   /   filter current dir      R   recursive (depth 3)
