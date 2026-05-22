@@ -40,6 +40,10 @@ pub enum InputMode {
         text: String,
         scroll: u16,
     },
+    ImageModal {
+        title: String,
+        path: PathBuf,
+    },
     Search {
         query: String,
         recursive: bool,
@@ -79,7 +83,7 @@ impl AppState {
         if stale {
             match image::open(path) {
                 Ok(img) => {
-                    self.image_cache = Some((path.to_path_buf(), img.thumbnail(480, 480).to_rgba8()));
+                    self.image_cache = Some((path.to_path_buf(), img.thumbnail(1024, 1024).to_rgba8()));
                 }
                 Err(_) => {
                     self.image_cache = None;
@@ -259,8 +263,26 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
 
     footer::render(f, chunks[idx], state.current_transient());
 
+    if let InputMode::ImageModal { title, path } = &state.mode {
+        let title = title.clone();
+        let path = path.clone();
+        let rect = ui::centered_rect(area, 100, 90);
+        let block = ratatui::widgets::Block::default()
+            .title(ratatui::text::Line::from(ratatui::text::Span::styled(
+                format!(" {title} "),
+                ui::theme::pane_header_focused(),
+            )))
+            .borders(ratatui::widgets::Borders::ALL)
+            .border_style(ui::theme::pane_header());
+        f.render_widget(ratatui::widgets::Clear, rect);
+        let inner = block.inner(rect);
+        f.render_widget(block, rect);
+        let lines = state.image_lines(&path, inner.width, inner.height);
+        f.render_widget(ratatui::widgets::Paragraph::new(lines), inner);
+    } else {
     match &state.mode {
         InputMode::Normal => {}
+        InputMode::ImageModal { .. } => {}
         InputMode::ActionMenu(menu) => {
             let rect = ui::centered_rect(area, 60, 60);
             modal::render_action_menu(f, rect, menu);
@@ -290,6 +312,7 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
             let p = ratatui::widgets::Paragraph::new(format!("{prefix} {query}"));
             f.render_widget(p, inner);
         }
+    }
     }
 }
 
@@ -349,6 +372,12 @@ fn handle_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>>
     }
     if matches!(state.mode, InputMode::PreviewModal { .. }) {
         return handle_preview_modal_key(state, key);
+    }
+    if matches!(state.mode, InputMode::ImageModal { .. }) {
+        if matches!(key.code, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter) {
+            state.mode = InputMode::Normal;
+        }
+        return Ok(None);
     }
     if matches!(state.mode, InputMode::Search { .. }) {
         return handle_search_key(state, key);
@@ -728,6 +757,13 @@ fn action_copy_contents(state: &mut AppState) {
 fn open_preview_modal(state: &mut AppState) {
     let Some(entry) = state.focused().cloned() else { return };
     if entry.is_dir_like() {
+        return;
+    }
+    if crate::ui::image::is_image(&entry.display_name()) {
+        state.mode = InputMode::ImageModal {
+            title: entry.display_name(),
+            path: entry.path.clone(),
+        };
         return;
     }
     let title = entry.display_name();
