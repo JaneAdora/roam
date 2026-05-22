@@ -16,10 +16,10 @@ fn base() -> Style {
     theme::preview_text()
 }
 fn code() -> Style {
-    Style::default().fg(theme::LAVENDER)
+    Style::default().fg(theme::lavender())
 }
 fn dim() -> Style {
-    Style::default().fg(theme::LAVENDER).add_modifier(Modifier::DIM)
+    Style::default().fg(theme::lavender()).add_modifier(Modifier::DIM)
 }
 
 /// Render markdown text into styled lines.
@@ -41,12 +41,12 @@ pub fn to_lines(text: &str) -> Vec<Line<'static>> {
         if let Some((level, htext)) = heading(trimmed) {
             let style = match level {
                 1 => Style::default()
-                    .fg(theme::MAGENTA)
+                    .fg(theme::magenta())
                     .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
                 2 => Style::default()
-                    .fg(theme::LAVENDER)
+                    .fg(theme::lavender())
                     .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-                _ => Style::default().fg(theme::LAVENDER).add_modifier(Modifier::BOLD),
+                _ => Style::default().fg(theme::lavender()).add_modifier(Modifier::BOLD),
             };
             out.push(Line::from(Span::styled(htext.to_string(), style)));
             continue;
@@ -65,7 +65,7 @@ pub fn to_lines(text: &str) -> Vec<Line<'static>> {
         if let Some((indent, marker, rest)) = list_item(raw) {
             let mut spans = vec![
                 Span::raw(indent.to_string()),
-                Span::styled(format!("{marker} "), Style::default().fg(theme::MAGENTA)),
+                Span::styled(format!("{marker} "), Style::default().fg(theme::magenta())),
             ];
             spans.extend(inline(rest, base()));
             out.push(Line::from(spans));

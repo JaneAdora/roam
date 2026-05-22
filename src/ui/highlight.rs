@@ -14,7 +14,9 @@ pub enum Lang {
     Markup,
 }
 
-const KEYWORD: Color = theme::MAGENTA;
+fn keyword() -> Color {
+    theme::magenta()
+}
 const STRING: Color = Color::Rgb(0x9e, 0xce, 0x6a);
 const NUMBER: Color = Color::Rgb(0xe5, 0xc0, 0x7b);
 const FUNC: Color = Color::Rgb(0x61, 0xaf, 0xef);
@@ -23,7 +25,7 @@ const ATTR: Color = Color::Rgb(0xd1, 0x9a, 0x66);
 
 fn comment_style() -> Style {
     Style::default()
-        .fg(theme::LAVENDER)
+        .fg(theme::lavender())
         .add_modifier(Modifier::DIM | Modifier::ITALIC)
 }
 fn plain() -> Style {
@@ -255,7 +257,7 @@ fn code_line(raw: &str, carry: Carry, sx: &Syntax) -> (Line<'static>, Carry) {
             push_buf(&mut spans, &mut buf, plain());
             let word: String = chars[i..j].iter().collect();
             let style = if sx.keywords.contains(&word.as_str()) {
-                Style::default().fg(KEYWORD)
+                Style::default().fg(keyword())
             } else if next_nonspace(&chars, j) == Some('(') {
                 Style::default().fg(FUNC)
             } else {
@@ -409,7 +411,7 @@ mod tests {
     #[test]
     fn code_keyword_string_number_comment() {
         let l = &to_lines("const x = \"hi\"; // note", Lang::Code)[0];
-        assert_eq!(fg_of(l, "const"), Some(KEYWORD));
+        assert_eq!(fg_of(l, "const"), Some(keyword()));
         assert!(l.spans.iter().any(|s| s.content.as_ref() == "\"hi\"" && s.style.fg == Some(STRING)));
         assert!(l.spans.iter().any(|s| s.content.contains("// note")
             && s.style.add_modifier.contains(Modifier::ITALIC)));
@@ -439,11 +441,11 @@ mod tests {
     #[test]
     fn python_hash_comment_keyword_call() {
         let lines = to_lines("def f(x):  # doc\n    return x", Lang::Python);
-        assert_eq!(fg_of(&lines[0], "def"), Some(KEYWORD));
+        assert_eq!(fg_of(&lines[0], "def"), Some(keyword()));
         assert_eq!(fg_of(&lines[0], "f"), Some(FUNC));
         assert!(lines[0].spans.iter().any(|s| s.content.contains("# doc")
             && s.style.add_modifier.contains(Modifier::ITALIC)));
-        assert_eq!(fg_of(&lines[1], "return"), Some(KEYWORD));
+        assert_eq!(fg_of(&lines[1], "return"), Some(keyword()));
     }
 
     #[test]
