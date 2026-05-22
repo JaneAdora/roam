@@ -146,6 +146,13 @@ impl AppState {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| file.to_string_lossy().into_owned());
+        if crate::ui::image::is_image(&title) {
+            self.mode = InputMode::ImageModal {
+                title,
+                path: file.to_path_buf(),
+            };
+            return;
+        }
         let text = match preview::read(file) {
             preview::Preview::Text(s) => s,
             preview::Preview::Binary { size } => {
@@ -245,9 +252,8 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
             .filter(|p| ui::image::is_image(&p.to_string_lossy()));
         if let Some(path) = img_path {
             let area = split[1];
-            let block = ratatui::widgets::Block::default()
-                .borders(ratatui::widgets::Borders::LEFT)
-                .border_style(ui::theme::dim_footer());
+            let name = state.focused().map(|e| e.display_name());
+            let block = ui_preview::pane_block(name.as_deref());
             let inner = block.inner(area);
             f.render_widget(block, area);
             let lines = state.image_lines(&path, inner.width, inner.height);
@@ -266,7 +272,7 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
     if let InputMode::ImageModal { title, path } = &state.mode {
         let title = title.clone();
         let path = path.clone();
-        let rect = ui::centered_rect(area, 100, 90);
+        let rect = ui::centered_rect(area, 100, 100);
         let block = ratatui::widgets::Block::default()
             .title(ratatui::text::Line::from(ratatui::text::Span::styled(
                 format!(" {title} "),
@@ -292,7 +298,7 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
             modal::render_help(f, rect);
         }
         InputMode::PreviewModal { title, text, scroll } => {
-            let rect = ui::centered_rect(area, 100, 90);
+            let rect = ui::centered_rect(area, 100, 100);
             ui_preview::render_modal(f, rect, title, text, *scroll);
         }
         InputMode::Search { query, recursive } => {

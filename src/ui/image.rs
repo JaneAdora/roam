@@ -27,7 +27,7 @@ pub fn halfblocks(img: &RgbaImage, cols: u16, rows: u16) -> Vec<Line<'static>> {
     let scale = (tw as f32 / iw as f32).min(th as f32 / ih as f32);
     let nw = ((iw as f32 * scale).round() as u32).clamp(1, tw);
     let nh = ((ih as f32 * scale).round() as u32).clamp(1, th);
-    let r = image::imageops::resize(img, nw, nh, FilterType::Triangle);
+    let r = image::imageops::resize(img, nw, nh, FilterType::Lanczos3);
 
     let mut lines = Vec::with_capacity((nh as usize).div_ceil(2));
     let mut y = 0u32;
