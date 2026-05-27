@@ -383,7 +383,10 @@ fn handle_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>>
         return handle_preview_modal_key(state, key);
     }
     if matches!(state.mode, InputMode::ImageModal { .. }) {
-        if matches!(key.code, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter) {
+        if matches!(key.code,
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter
+            | KeyCode::Left | KeyCode::Char('h')
+        ) {
             state.mode = InputMode::Normal;
         }
         return Ok(None);
@@ -504,7 +507,8 @@ fn handle_preview_modal_key(state: &mut AppState, key: KeyEvent) -> Result<Optio
         return Ok(None);
     };
     match key.code {
-        KeyCode::Esc | KeyCode::Char('q') => state.mode = InputMode::Normal,
+        KeyCode::Esc | KeyCode::Char('q')
+        | KeyCode::Left | KeyCode::Char('h') => state.mode = InputMode::Normal,
         KeyCode::Char('j') | KeyCode::Down => *scroll = scroll.saturating_add(1),
         KeyCode::Char('k') | KeyCode::Up => *scroll = scroll.saturating_sub(1),
         KeyCode::PageDown | KeyCode::Char(' ') => *scroll = scroll.saturating_add(10),
@@ -591,7 +595,10 @@ fn move_up(state: &mut AppState) {
 
 fn enter_dir(state: &mut AppState) {
     let Some(entry) = state.focused() else { return };
+    // Right-arrow / l on a file opens the preview modal directly (image or text),
+    // bypassing the Enter action-menu. Left-arrow / h on the modal closes it.
     if !entry.is_dir_like() {
+        open_preview_modal(state);
         return;
     }
     if entry.is_broken_symlink() {
