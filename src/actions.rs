@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn quote_simple_path_unquoted() {
-        assert_eq!(quote_path(&PathBuf::from("/home/jane/projects")), "/home/jane/projects");
+        assert_eq!(quote_path(&PathBuf::from("/tmp/projects")), "/tmp/projects");
     }
 
     #[test]
