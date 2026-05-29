@@ -181,7 +181,6 @@ fn code_line(raw: &str, carry: Carry, sx: &Syntax) -> (Line<'static>, Carry) {
         if starts_with_at(&chars, i, sx.line_comment) {
             push_buf(&mut spans, &mut buf, plain());
             spans.push(Span::styled(chars[i..].iter().collect::<String>(), comment_style()));
-            i = n;
             break;
         }
         // block comment

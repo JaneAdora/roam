@@ -3,6 +3,7 @@ use anyhow::Result;
 use std::cmp::Ordering;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 pub fn list_dir(path: &Path, show_hidden: bool) -> Result<Vec<Entry>> {
     let read = match fs::read_dir(path) {
@@ -92,6 +93,29 @@ fn compare(a: &Entry, b: &Entry) -> Ordering {
 
 pub fn parent_of(path: &Path) -> Option<PathBuf> {
     path.parent().map(PathBuf::from)
+}
+
+/// Compact relative age of a file's mtime, e.g. "5m", "3h", "2d", "4w", "6mo", "1y".
+pub fn human_mtime(t: SystemTime) -> String {
+    let secs = SystemTime::now()
+        .duration_since(t)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    if secs < 60 {
+        format!("{}s", secs)
+    } else if secs < 3_600 {
+        format!("{}m", secs / 60)
+    } else if secs < 86_400 {
+        format!("{}h", secs / 3_600)
+    } else if secs < 7 * 86_400 {
+        format!("{}d", secs / 86_400)
+    } else if secs < 30 * 86_400 {
+        format!("{}w", secs / (7 * 86_400))
+    } else if secs < 365 * 86_400 {
+        format!("{}mo", secs / (30 * 86_400))
+    } else {
+        format!("{}y", secs / (365 * 86_400))
+    }
 }
 
 pub fn human_size(n: u64) -> String {

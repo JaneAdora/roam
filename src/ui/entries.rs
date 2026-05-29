@@ -1,4 +1,4 @@
-use crate::fs::human_size;
+use crate::fs::{human_mtime, human_size};
 use crate::model::Entry;
 use crate::ui::icons::{self, IconStyle};
 use crate::ui::layout::Columns;
@@ -86,6 +86,16 @@ fn make_item<'a>(entry: &'a Entry, focused: bool, cols: Columns, icon_style: Ico
             spans.push(Span::raw("  "));
             spans.push(Span::styled(
                 format!("{:>6}", human_size(s)),
+                theme::dim_footer(),
+            ));
+        }
+    }
+
+    if cols.show_mtime {
+        if let Some(m) = entry.mtime {
+            spans.push(Span::raw("  "));
+            spans.push(Span::styled(
+                format!("{:>4}", human_mtime(m)),
                 theme::dim_footer(),
             ));
         }
