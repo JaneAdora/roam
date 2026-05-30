@@ -24,13 +24,14 @@ pub fn copy_to_clipboard(s: &str) -> Result<CopyResult> {
     use std::io::Write;
     let total = s.len();
     let (payload, outcome) = if total > OSC52_RAW_CAP {
-        (
-            &s[..OSC52_RAW_CAP],
-            CopyResult::Truncated {
-                sent: OSC52_RAW_CAP,
-                total,
-            },
-        )
+        // Back off to a UTF-8 char boundary so slicing can't panic mid-codepoint
+        // (a multibyte char straddling byte OSC52_RAW_CAP would otherwise crash,
+        // corrupting the terminal while the TUI owns the alt-screen).
+        let mut end = OSC52_RAW_CAP;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        (&s[..end], CopyResult::Truncated { sent: end, total })
     } else {
         (s, CopyResult::Full)
     };
