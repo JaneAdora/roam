@@ -632,6 +632,7 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
+ "suite-term",
  "toml",
 ]
 
@@ -793,6 +794,15 @@ dependencies = [
  "quote",
  "rustversion",
  "syn",
+]
+
+[[package]]
+name = "suite-term"
+version = "0.1.0"
+source = "git+https://github.com/JaneAdora/suite-term?rev=eec40bcd1516156d5245ef73aeb4a5aef243d497#eec40bcd1516156d5245ef73aeb4a5aef243d497"
+dependencies = [
+ "base64",
+ "crossterm",
 ]
 
 [[package]]

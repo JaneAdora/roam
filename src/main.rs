@@ -66,6 +66,7 @@ fn main() -> Result<()> {
         (resolved, None)
     };
 
+    suite_term::panic::install_panic_hook();
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     crossterm::execute!(

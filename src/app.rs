@@ -1,4 +1,4 @@
-use crate::actions::{self, CopyResult, RunOutcome};
+use crate::actions::{self, RunOutcome};
 use crate::bookmarks;
 use crate::config;
 use crate::fs as roam_fs;
@@ -734,12 +734,14 @@ fn action_new_tab(state: &mut AppState) -> Option<RunOutcome> {
 fn action_copy_path(state: &mut AppState) {
     let Some(path) = action_target(state) else { return };
     let s = path.to_string_lossy().into_owned();
-    match actions::copy_to_clipboard(&s) {
-        Ok(CopyResult::Full) => state.toast(format!("copied: {s}")),
-        Ok(CopyResult::Truncated { sent, total }) => {
-            state.toast(format!("copied (truncated {sent}/{total}B)"))
-        }
-        Err(e) => state.toast(format!("copy failed: {e}")),
+    let r = actions::copy_to_clipboard(&s);
+    if r.truncated() {
+        state.toast(format!(
+            "copied (truncated {}/{}B)",
+            r.sent_bytes, r.total_bytes
+        ))
+    } else {
+        state.toast(format!("copied: {s}"))
     }
 }
 
@@ -765,12 +767,14 @@ fn action_copy_contents(state: &mut AppState) {
             return;
         }
     };
-    match actions::copy_to_clipboard(&text) {
-        Ok(CopyResult::Full) => state.toast(format!("copied {}B", text.len())),
-        Ok(CopyResult::Truncated { sent, total }) => {
-            state.toast(format!("copied (truncated {sent}/{total}B)"))
-        }
-        Err(e) => state.toast(format!("copy failed: {e}")),
+    let r = actions::copy_to_clipboard(&text);
+    if r.truncated() {
+        state.toast(format!(
+            "copied (truncated {}/{}B)",
+            r.sent_bytes, r.total_bytes
+        ))
+    } else {
+        state.toast(format!("copied {}B", r.total_bytes))
     }
 }
 

@@ -1,8 +1,7 @@
-use anyhow::Result;
-use base64::Engine;
 use std::path::Path;
 
-pub const OSC52_RAW_CAP: usize = 4096;
+use suite_term::clipboard::emit_osc52;
+use suite_term::quote::quote_path;
 
 #[derive(Debug)]
 pub enum RunOutcome {
@@ -10,48 +9,13 @@ pub enum RunOutcome {
     PrintAndExit(String),
 }
 
-pub fn osc52_encode(s: &str) -> String {
-    let b64 = base64::engine::general_purpose::STANDARD.encode(s);
-    format!("\x1b]52;c;{b64}\x07")
-}
+pub use suite_term::clipboard::Osc52;
 
-pub enum CopyResult {
-    Full,
-    Truncated { sent: usize, total: usize },
-}
-
-pub fn copy_to_clipboard(s: &str) -> Result<CopyResult> {
-    use std::io::Write;
-    let total = s.len();
-    let (payload, outcome) = if total > OSC52_RAW_CAP {
-        // Back off to a UTF-8 char boundary so slicing can't panic mid-codepoint
-        // (a multibyte char straddling byte OSC52_RAW_CAP would otherwise crash,
-        // corrupting the terminal while the TUI owns the alt-screen).
-        let mut end = OSC52_RAW_CAP;
-        while end > 0 && !s.is_char_boundary(end) {
-            end -= 1;
-        }
-        (&s[..end], CopyResult::Truncated { sent: end, total })
-    } else {
-        (s, CopyResult::Full)
-    };
-    let seq = osc52_encode(payload);
-    let mut stdout = std::io::stdout().lock();
-    stdout.write_all(seq.as_bytes())?;
-    stdout.flush()?;
-    Ok(outcome)
-}
-
-fn quote_path(p: &Path) -> String {
-    let s = p.to_string_lossy();
-    if s.chars().all(|c| {
-        c.is_alphanumeric() || matches!(c, '/' | '_' | '-' | '.' | '+' | '~' | ',')
-    }) {
-        s.into_owned()
-    } else {
-        let escaped = s.replace('\'', "'\\''");
-        format!("'{escaped}'")
-    }
+/// Emit the OSC 52 clipboard sequence for `s` (capped at a char boundary).
+/// Returns an `Osc52` whose `.truncated()` / `.sent_bytes` / `.total_bytes`
+/// describe what was actually copied.
+pub fn copy_to_clipboard(s: &str) -> Osc52 {
+    emit_osc52(s)
 }
 
 pub fn cd_command(path: &Path) -> String {
@@ -92,9 +56,19 @@ mod tests {
 
     #[test]
     fn osc52_envelope() {
-        let out = osc52_encode("hi");
+        let out = suite_term::clipboard::osc52_sequence("hi").sequence;
         assert!(out.starts_with("\x1b]52;c;"));
         assert!(out.ends_with('\x07'));
+    }
+
+    #[test]
+    fn osc52_truncation_reports_exact_sent_bytes() {
+        let mut s = "a".repeat(suite_term::clipboard::OSC52_CAP - 1);
+        s.push('\u{e9}'); // 2-byte char straddles the cap boundary
+        let r = suite_term::clipboard::osc52_sequence(&s);
+        assert!(r.truncated());
+        assert_eq!(r.sent_bytes, suite_term::clipboard::OSC52_CAP - 1);
+        assert_eq!(r.total_bytes, suite_term::clipboard::OSC52_CAP + 1);
     }
 
     #[test]
