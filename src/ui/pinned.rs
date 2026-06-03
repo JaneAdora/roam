@@ -1,5 +1,6 @@
 use crate::ui::theme;
 use ratatui::layout::Rect;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -9,7 +10,9 @@ pub struct Bookmark {
     pub label: String,
 }
 
-pub fn render(f: &mut Frame, area: Rect, bookmarks: &[Bookmark]) {
+/// Render the one-line pinned bookmarks bar. When `selected` is `Some(i)` the
+/// pane is focused and bookmark `i` is highlighted (reversed).
+pub fn render(f: &mut Frame, area: Rect, bookmarks: &[Bookmark], selected: Option<usize>) {
     if bookmarks.is_empty() {
         return;
     }
@@ -18,11 +21,19 @@ pub fn render(f: &mut Frame, area: Rect, bookmarks: &[Bookmark]) {
         if i > 0 {
             spans.push(Span::raw("  "));
         }
-        spans.push(Span::styled(
-            format!("[{}]", bm.key),
-            theme::pane_header_focused(),
-        ));
-        spans.push(Span::raw(format!(" {}", bm.label)));
+        let focused = selected == Some(i);
+        let key_style = if focused {
+            theme::pane_header_focused().add_modifier(Modifier::REVERSED)
+        } else {
+            theme::pane_header_focused()
+        };
+        let label_style = if focused {
+            Style::default().add_modifier(Modifier::REVERSED)
+        } else {
+            Style::default()
+        };
+        spans.push(Span::styled(format!("[{}]", bm.key), key_style));
+        spans.push(Span::styled(format!(" {}", bm.label), label_style));
     }
     f.render_widget(Paragraph::new(Line::from(spans)), area);
 }

@@ -31,6 +31,10 @@ pub struct AppState {
     pub find: Option<String>,
     /// File-icon style for the entry list (cycled with `I`, persisted).
     pub icon_style: crate::ui::icons::IconStyle,
+    /// Which pane has keyboard focus (Tab swaps between entries and pinned).
+    pub focus: Pane,
+    /// Selected bookmark index when the pinned pane is focused.
+    pub pinned_selected: usize,
 }
 
 pub enum InputMode {
@@ -50,6 +54,16 @@ pub enum InputMode {
         query: String,
         recursive: bool,
     },
+    BookmarkPrompt {
+        key: char,
+        label: String,
+    },
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum Pane {
+    Entries,
+    Pinned,
 }
 
 impl AppState {
@@ -69,6 +83,8 @@ impl AppState {
             pending_danger: None,
             find: None,
             icon_style: persisted.icons,
+            focus: Pane::Entries,
+            pinned_selected: 0,
         })
     }
 
@@ -233,7 +249,12 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
     header::render(f, chunks[idx], &state.cwd, state.current_transient(), find_info);
     idx += 1;
     if pinned_height > 0 {
-        pinned::render(f, chunks[idx], &state.bookmarks.display);
+        let pinned_sel = if state.focus == Pane::Pinned {
+            Some(state.pinned_selected)
+        } else {
+            None
+        };
+        pinned::render(f, chunks[idx], &state.bookmarks.display, pinned_sel);
         idx += 1;
     }
 
@@ -321,6 +342,20 @@ fn render(f: &mut ratatui::Frame, state: &mut AppState) {
             let p = ratatui::widgets::Paragraph::new(format!("{prefix} {query}"));
             f.render_widget(p, inner);
         }
+        InputMode::BookmarkPrompt { key, label } => {
+            let rect = ui::centered_rect(area, 60, 20);
+            let block = ratatui::widgets::Block::default()
+                .title(format!(" bookmark this dir as [{key}] "))
+                .borders(ratatui::widgets::Borders::ALL)
+                .border_style(ui::theme::pane_header());
+            f.render_widget(ratatui::widgets::Clear, rect);
+            let inner = block.inner(rect);
+            f.render_widget(block, rect);
+            let p = ratatui::widgets::Paragraph::new(format!(
+                "label: {label}\n\n(Enter to save, Esc to cancel)"
+            ));
+            f.render_widget(p, inner);
+        }
     }
     }
 }
@@ -394,9 +429,16 @@ fn handle_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>>
     if matches!(state.mode, InputMode::Search { .. }) {
         return handle_search_key(state, key);
     }
+    if matches!(state.mode, InputMode::BookmarkPrompt { .. }) {
+        return handle_bookmark_key(state, key);
+    }
 
     if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
         return Ok(Some(RunOutcome::Quit));
+    }
+
+    if state.focus == Pane::Pinned {
+        return handle_pinned_key(state, key);
     }
 
     match key.code {
@@ -452,6 +494,9 @@ fn handle_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>>
         KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
             jump_bookmark(state, c);
         }
+
+        KeyCode::Tab => focus_pinned(state),
+        KeyCode::Char('B') => start_bookmark_prompt(state),
 
         KeyCode::Esc => {
             if state.find.is_some() {
@@ -616,6 +661,98 @@ fn jump_bookmark(state: &mut AppState, key: char) {
         } else {
             state.toast(format!("bookmark {key}: path missing"));
         }
+    }
+}
+
+fn focus_pinned(state: &mut AppState) {
+    if state.bookmarks.display.is_empty() {
+        state.toast("no bookmarks yet (B to add)");
+        return;
+    }
+    if state.pinned_selected >= state.bookmarks.display.len() {
+        state.pinned_selected = 0;
+    }
+    state.focus = Pane::Pinned;
+}
+
+fn handle_pinned_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>> {
+    let len = state.bookmarks.display.len();
+    match key.code {
+        KeyCode::Char('q') => return Ok(Some(RunOutcome::Quit)),
+        KeyCode::Char('?') => {
+            state.focus = Pane::Entries;
+            state.mode = InputMode::Help;
+        }
+        KeyCode::Tab | KeyCode::Esc | KeyCode::Left | KeyCode::Char('h') => {
+            state.focus = Pane::Entries;
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+            if len > 0 {
+                state.pinned_selected = (state.pinned_selected + 1).min(len - 1);
+            }
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            state.pinned_selected = state.pinned_selected.saturating_sub(1);
+        }
+        KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
+            if let Some(bm) = state.bookmarks.display.get(state.pinned_selected) {
+                let bkey = bm.key;
+                state.focus = Pane::Entries;
+                jump_bookmark(state, bkey);
+            }
+        }
+        _ => {}
+    }
+    Ok(None)
+}
+
+fn start_bookmark_prompt(state: &mut AppState) {
+    match bookmarks::next_free_key(&state.bookmarks.paths) {
+        Some(key) => {
+            let label = state
+                .cwd
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| state.cwd.to_string_lossy().into_owned());
+            state.mode = InputMode::BookmarkPrompt { key, label };
+        }
+        None => state.toast("bookmark slots full (1-9)"),
+    }
+}
+
+fn handle_bookmark_key(state: &mut AppState, key: KeyEvent) -> Result<Option<RunOutcome>> {
+    let InputMode::BookmarkPrompt { key: bkey, label } = &mut state.mode else {
+        return Ok(None);
+    };
+    match key.code {
+        KeyCode::Esc => state.mode = InputMode::Normal,
+        KeyCode::Enter => {
+            let bkey = *bkey;
+            let label = label.trim().to_string();
+            let cwd = state.cwd.clone();
+            state.mode = InputMode::Normal;
+            if label.is_empty() {
+                state.toast("bookmark needs a label");
+                return Ok(None);
+            }
+            commit_bookmark(state, bkey, &label, &cwd);
+        }
+        KeyCode::Backspace => {
+            label.pop();
+        }
+        KeyCode::Char(c) => label.push(c),
+        _ => {}
+    }
+    Ok(None)
+}
+
+fn commit_bookmark(state: &mut AppState, key: char, label: &str, path: &Path) {
+    match bookmarks::add(key, label, path) {
+        Ok(()) => {
+            state.bookmarks = bookmarks::load();
+            state.toast(format!("bookmarked [{key}] {label}"));
+        }
+        Err(e) => state.toast(format!("bookmark failed: {e}")),
     }
 }
 
